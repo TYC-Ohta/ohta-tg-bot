@@ -1,10 +1,15 @@
+print("Starting...")
+
 import asyncio
+import csv
 
 from aiogram import Bot, Dispatcher, Router
 from aiogram.client.bot import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
+
+CLUBS = "./clubs.csv"
 
 router = Router()
 
@@ -21,13 +26,21 @@ def get_menu(menu: str) -> InlineKeyboardMarkup:
             ])
         case "back":
             keyboard = InlineKeyboardBuilder([
-                [InlineKeyboardButton(text="Назад", callback_data="back_to_main_menu")]
+                [InlineKeyboardButton(text="Назад", callback_data="to_main")]
             ])
         case "clubs":
-            keyboard = InlineKeyboardBuilder([
-                [InlineKeyboardButton(text="Найти ближайшие", callback_data="find_closest")],
-                [InlineKeyboardButton(text="Выбрать клуб", url="https://example.com")],
-                [InlineKeyboardButton(text="Назад", callback_data="back_to_main_menu")]
+            with open(CLUBS) as f:
+                clubs_info = tuple(csv.reader(f, csv.QUOTE_NOTNULL))
+
+            buttons: list = []
+
+            for c in clubs_info:
+                buttons.append(
+                    [InlineKeyboardButton(text=c[0], url=c[-1])]
+                )
+
+            keyboard = InlineKeyboardBuilder(buttons + [
+                [InlineKeyboardButton(text="Назад", callback_data="to_main")]
             ])
 
     return keyboard.as_markup()
@@ -35,7 +48,7 @@ def get_menu(menu: str) -> InlineKeyboardMarkup:
 
 @router.message(lambda m: m.text == "/start")
 async def start(message: Message) -> None:
-    await message.reply("Привет! (краткая инфа про ПМЦ)",
+    await message.reply("Привет! {краткая инфа про ПМЦ}",
                         reply_markup=get_menu("main"))
 
 
@@ -46,26 +59,26 @@ async def find_closest(callback_query):
                                         reply_markup=get_menu("back"))
 
 
-@router.callback_query(lambda c: c.data == "back_to_main_menu")
-async def back_to_main_menu_callback(callback_query):
+@router.callback_query(lambda c: c.data == "to_main")
+async def to_main_callback(callback_query):
     await callback_query.message.answer("Вы вернулись в главное меню:",
                                         reply_markup=get_menu("main"))
 
 
 @router.callback_query(lambda c: c.data == "all")
-async def back_to_main_menu_callback(callback_query):
-    await callback_query.message.answer("Все клубы: {}",
+async def to_main_callback(callback_query):
+    await callback_query.message.answer("Все клубы:",
                                         reply_markup=get_menu("clubs"))
 
 
 @router.callback_query(lambda c: c.data == "free_lessons")
-async def back_to_main_menu_callback(callback_query):
+async def to_main_callback(callback_query):
     await callback_query.message.answer("Информация о бесплатных занятиях: {}",
                                         reply_markup=get_menu("back"))
 
 
 @router.callback_query(lambda c: c.data == "question")
-async def back_to_main_menu_callback(callback_query):
+async def to_main_callback(callback_query):
     # TODO
     await callback_query.message.answer("Задайте ваш вопрос, и мы обязательно ответим!",
                                         reply_markup=get_menu("back"))
@@ -84,4 +97,6 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
+    print("Started")
     asyncio.run(main())
+
