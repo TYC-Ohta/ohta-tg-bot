@@ -1,7 +1,7 @@
 print("Starting...")
 
 import asyncio
-import csv
+import json
 
 from aiogram import Bot, Dispatcher, Router
 from aiogram.client.bot import DefaultBotProperties
@@ -9,7 +9,7 @@ from aiogram.enums import ParseMode
 from aiogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-CLUBS = "./clubs.csv"
+CLUBS = "./clubs.json"
 
 router = Router()
 
@@ -30,13 +30,13 @@ def get_menu(menu: str) -> InlineKeyboardMarkup:
             ])
         case "clubs":
             with open(CLUBS) as f:
-                clubs_info = tuple(csv.reader(f, csv.QUOTE_NOTNULL))
+                clubs_info = json.load(f)
 
             buttons: list = []
 
             for c in clubs_info:
                 buttons.append(
-                    [InlineKeyboardButton(text=c[0], url=c[-1])]
+                    [InlineKeyboardButton(text=c["name"], url=c["vk"])]
                 )
 
             keyboard = InlineKeyboardBuilder(buttons + [
