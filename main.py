@@ -1,46 +1,51 @@
-print("Starting...")
-
 import asyncio
 import json
 
 from aiogram import Bot, Dispatcher, Router
 from aiogram.client.bot import DefaultBotProperties
 from aiogram.enums import ParseMode
-from aiogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-CLUBS = "./clubs.json"
+CLUBS: str = "./clubs.json"
+DESCR: str = (
+    '<b>Молодёжный центр "Охта"</b> – это 21 молодёжный клуб и более 300 студий, расположенных в разных уголках '
+    'Красногвардейского района Санкт-Петербурга.\n'
+    'Наша миссия – создать среду, которая поможет тебе раскрыть свой творческий потенциал и самореализоваться!\n\n'
+    'Нажми на кнопку под сообщением чтобы получить больше информации 👇')
 
-router = Router()
+file_lock: asyncio.Lock = asyncio.Lock()
+router: Router = Router()
 
 
-def get_menu(menu: str) -> InlineKeyboardMarkup:
+async def get_menu(menu: str) -> InlineKeyboardMarkup:
     keyboard = InlineKeyboardBuilder()
     match menu:
         case "main":
             keyboard = InlineKeyboardBuilder([
+                [InlineKeyboardButton(text="Записаться", url="https://vk.com/pmc_ohta")],
                 [InlineKeyboardButton(text="Все клубы", callback_data="all")],
-                [InlineKeyboardButton(text="Бесплатные занятия", callback_data="free_lessons")],
-                [InlineKeyboardButton(text="Афиша", url="https://example.com")],
+                [InlineKeyboardButton(text="Найти ближайшие", callback_data="find")],
                 [InlineKeyboardButton(text="Задать вопрос", callback_data="question")]
             ])
         case "back":
             keyboard = InlineKeyboardBuilder([
-                [InlineKeyboardButton(text="Назад", callback_data="to_main")]
+                [InlineKeyboardButton(text="Назад", callback_data="main")]
             ])
         case "clubs":
-            with open(CLUBS) as f:
-                clubs_info = json.load(f)
+            async with file_lock:
+                with open(CLUBS) as f:
+                    clubs = json.load(f)
 
             buttons: list = []
 
-            for c in clubs_info:
+            for i, club in enumerate(clubs):
                 buttons.append(
-                    [InlineKeyboardButton(text=c["name"], url=c["vk"])]
+                    [InlineKeyboardButton(text=club["name"], callback_data=f"club:{i}")]
                 )
 
             keyboard = InlineKeyboardBuilder(buttons + [
-                [InlineKeyboardButton(text="Назад", callback_data="to_main")]
+                [InlineKeyboardButton(text="Назад", callback_data="main")]
             ])
 
     return keyboard.as_markup()
@@ -48,40 +53,60 @@ def get_menu(menu: str) -> InlineKeyboardMarkup:
 
 @router.message(lambda m: m.text == "/start")
 async def start(message: Message) -> None:
-    await message.reply("Привет! {краткая инфа про ПМЦ}",
-                        reply_markup=get_menu("main"))
+    await message.reply(
+        f'Привет!\n\n{DESCR}',
+        reply_markup=await get_menu("main"))
 
 
-@router.callback_query(lambda c: c.data == "find_closest")
-async def find_closest(callback_query):
+@router.callback_query(lambda c: c.data == "find")
+async def find(callback: CallbackQuery) -> None:
     # TODO
-    await callback_query.message.answer("Поиск в стадии разработки!",
-                                        reply_markup=get_menu("back"))
+    await callback.message.answer(
+        "Поиск в стадии разработки!",
+        reply_markup=await get_menu("back"))
 
 
-@router.callback_query(lambda c: c.data == "to_main")
-async def to_main_callback(callback_query):
-    await callback_query.message.answer("Вы вернулись в главное меню:",
-                                        reply_markup=get_menu("main"))
+@router.callback_query(lambda c: c.data == "main")
+async def back_to_main(callback: CallbackQuery) -> None:
+    await callback.message.answer(
+        f"Вы вернулись в главное меню!\n\n{DESCR}",
+        reply_markup=await get_menu("main"))
 
 
 @router.callback_query(lambda c: c.data == "all")
-async def to_main_callback(callback_query):
-    await callback_query.message.answer("Все клубы:",
-                                        reply_markup=get_menu("clubs"))
-
-
-@router.callback_query(lambda c: c.data == "free_lessons")
-async def to_main_callback(callback_query):
-    await callback_query.message.answer("Информация о бесплатных занятиях: {}",
-                                        reply_markup=get_menu("back"))
+async def show_all_clubs(callback: CallbackQuery) -> None:
+    await callback.message.answer(
+        'Ниже представлены все клубы ПМЦ "Охта".\n'
+        'Нажми на кнопку, чтобы получить более подробную информацию о клубе.',
+        reply_markup=await get_menu("clubs"))
 
 
 @router.callback_query(lambda c: c.data == "question")
-async def to_main_callback(callback_query):
+async def ask_question(callback: CallbackQuery) -> None:
     # TODO
-    await callback_query.message.answer("Задайте ваш вопрос, и мы обязательно ответим!",
-                                        reply_markup=get_menu("back"))
+    await callback.message.answer(
+        "Задайте ваш вопрос, и мы обязательно ответим!",
+        reply_markup=await get_menu("back"))
+
+
+@router.callback_query(lambda c: c.data.startswith("club:"))
+async def get_club_info(callback: CallbackQuery) -> None:
+    async with file_lock:
+        with open(CLUBS) as f:
+            club = json.load(f)[int(callback.data.split(':')[-1])]
+
+    await callback.message.answer(
+        f'<b>{club["name"]}</b>\n'
+        f'<i>{club["address"]}</i>\n\n'
+        f'Направления:\n- {';\n- '.join(club["sections"])}.\n',
+        reply_markup=InlineKeyboardBuilder(
+            [
+                [InlineKeyboardButton(text='Я.Карты', url=club["y_maps"])],
+                [InlineKeyboardButton(text='ВКонтакте', url=club["vk"])],
+                [InlineKeyboardButton(text="Назад", callback_data="main")]
+            ]
+        ).as_markup()
+    )
 
 
 async def main() -> None:
@@ -99,4 +124,3 @@ async def main() -> None:
 if __name__ == "__main__":
     print("Started")
     asyncio.run(main())
-
