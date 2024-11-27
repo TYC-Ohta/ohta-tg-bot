@@ -2,9 +2,12 @@ import asyncio
 import json
 
 from aiogram import Bot, Dispatcher, Router
+from aiogram import F
 from aiogram.client.bot import DefaultBotProperties
 from aiogram.enums import ParseMode
-from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import Message, CallbackQuery
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton, \
+    ReplyKeyboardRemove
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 CLUBS: str = "./clubs.json"
@@ -37,18 +40,22 @@ async def get_menu(menu: str) -> InlineKeyboardMarkup:
                 with open(CLUBS) as f:
                     clubs = json.load(f)
 
-            buttons: list = []
-
-            for i, club in enumerate(clubs):
-                buttons.append(
-                    [InlineKeyboardButton(text=club["name"], callback_data=f"club:{i}")]
-                )
-
-            keyboard = InlineKeyboardBuilder(buttons + [
-                [InlineKeyboardButton(text="Назад", callback_data="main")]
-            ])
+            keyboard = format_clubs(tuple(enumerate(clubs)))
 
     return keyboard.as_markup()
+
+
+async def format_clubs(clubs: tuple) -> InlineKeyboardBuilder:
+    buttons: list = []
+
+    for i, club in clubs:
+        buttons.append(
+            [InlineKeyboardButton(text=club["name"], callback_data=f"club:{i}")]
+        )
+
+    return InlineKeyboardBuilder(buttons + [
+        [InlineKeyboardButton(text="Назад", callback_data="main")]
+    ])
 
 
 @router.message(lambda m: m.text == "/start")
@@ -62,8 +69,38 @@ async def start(message: Message) -> None:
 async def find(callback: CallbackQuery) -> None:
     # TODO
     await callback.message.answer(
-        "Поиск в стадии разработки!",
-        reply_markup=await get_menu("back"))
+        "Отправь свои координаты, чтобы найти ближайшие клубы!",
+        reply_markup=ReplyKeyboardMarkup(
+            keyboard=[[KeyboardButton(text="Поделиться локацией", request_location=True)]], resize_keyboard=True
+        ),
+    )
+
+
+@router.message(F.location)
+async def find_closest(message: Message) -> None:
+    msg: Message = await message.reply(
+        f'Идёт поиск...',
+        reply_markup=ReplyKeyboardRemove()
+    )
+
+    async with file_lock:
+        with open(CLUBS) as f:
+            clubs = json.load(f)
+
+    clubs = ((i, c) for i, c in enumerate(clubs))  # Indexing for correct work with callback
+
+    # Sorting based on location and taking the first three (sorry for formatting lol)
+    clubs = tuple(sorted(
+        clubs,
+        key=lambda c: abs(c[1]["coordinates"][0] - message.location.latitude)
+                      + abs(c[1]["coordinates"][1] - message.location.longitude))[:3])
+
+    await msg.delete()
+
+    await message.reply(
+        "Вот 3 ближайших клуба к тебе!",
+        reply_markup=(await format_clubs(clubs)).as_markup()
+    )
 
 
 @router.callback_query(lambda c: c.data == "main")
