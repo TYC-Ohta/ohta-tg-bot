@@ -6,8 +6,8 @@ from aiogram import F
 from aiogram.client.bot import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.types import Message, CallbackQuery
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton, \
-    ReplyKeyboardRemove
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 CLUBS: str = "./clubs.json"
@@ -22,11 +22,11 @@ router: Router = Router()
 
 
 async def get_menu(menu: str) -> InlineKeyboardMarkup:
-    keyboard = InlineKeyboardBuilder()
+    keyboard: InlineKeyboardBuilder = InlineKeyboardBuilder()
     match menu:
         case "main":
             keyboard = InlineKeyboardBuilder([
-                [InlineKeyboardButton(text="Записаться", url="https://vk.com/pmc_ohta")],
+                [InlineKeyboardButton(text="Записаться", url="https://vk.com/app5708398_-28488795")],
                 [InlineKeyboardButton(text="Все клубы", callback_data="all")],
                 [InlineKeyboardButton(text="Найти ближайшие", callback_data="find")],
                 # [InlineKeyboardButton(text="Задать вопрос", callback_data="question")]
@@ -38,9 +38,9 @@ async def get_menu(menu: str) -> InlineKeyboardMarkup:
         case "clubs":
             async with file_lock:
                 with open(CLUBS) as f:
-                    clubs = json.load(f)
+                    clubs: list[dict[str: any]] = json.load(f)
 
-            keyboard = format_clubs(tuple(enumerate(clubs)))
+            keyboard = await format_clubs(tuple(enumerate(clubs)))
 
     return keyboard.as_markup()
 
@@ -67,7 +67,6 @@ async def start(message: Message) -> None:
 
 @router.callback_query(lambda c: c.data == "find")
 async def find(callback: CallbackQuery) -> None:
-    # TODO
     await callback.message.answer(
         "Отправь свои координаты, чтобы найти ближайшие клубы!",
         reply_markup=ReplyKeyboardMarkup(
@@ -130,7 +129,7 @@ async def ask_question(callback: CallbackQuery) -> None:
 async def get_club_info(callback: CallbackQuery) -> None:
     async with file_lock:
         with open(CLUBS) as f:
-            club = json.load(f)[int(callback.data.split(':')[-1])]
+            club: dict[str: any] = json.load(f)[int(callback.data.split(':')[-1])]
 
     await callback.message.answer(
         f'<b>{club["name"]}</b>\n'
