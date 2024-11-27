@@ -29,7 +29,7 @@ async def get_menu(menu: str) -> InlineKeyboardMarkup:
                 [InlineKeyboardButton(text="Записаться", url="https://vk.com/pmc_ohta")],
                 [InlineKeyboardButton(text="Все клубы", callback_data="all")],
                 [InlineKeyboardButton(text="Найти ближайшие", callback_data="find")],
-                [InlineKeyboardButton(text="Задать вопрос", callback_data="question")]
+                # [InlineKeyboardButton(text="Задать вопрос", callback_data="question")]
             ])
         case "back":
             keyboard = InlineKeyboardBuilder([
